@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  gravity-spy-app:
+    build: .
+    container_name: gravity-spy-chatbot
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist ChromaDB data
+      - ./chroma_db:/app/chroma_db
+      # Mount PDF files
+      - ./data/pdfs:/app/data/pdfs
+      # Mount outputs directory (optional, for backups)
+      - ./outputs:/app/outputs
+      # Mount temp directory for uploads
+      - ./data/temp:/app/data/temp
+    environment:
+      # Load from .env file if it exists
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-02-15-preview}
+      - AZURE_OPENAI_DEPLOYMENT_NAME=${AZURE_OPENAI_DEPLOYMENT_NAME:-gpt-4}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

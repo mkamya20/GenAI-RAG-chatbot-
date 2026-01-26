@@ -5,7 +5,8 @@ Connects ChromaDB vector database with Azure OpenAI for RAG-based Q&A.
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from openai import AzureOpenAI
 from openai import APIError
@@ -127,9 +128,14 @@ def get_documents_info() -> List[DocumentInfo]:
         print(f"Error getting documents info: {e}")
         return []
 
-@app.get("/", response_model=Dict)
+@app.get("/")
 async def root():
-    """Root endpoint with API information."""
+    """Serve the frontend HTML file."""
+    return FileResponse("frontend.html")
+
+@app.get("/api", response_model=Dict)
+async def api_info():
+    """API information endpoint."""
     return {
         "name": "Gravity Spy PDF Search & Chatbot API",
         "version": "1.0.0",
