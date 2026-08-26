@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gravity Spy - Document Search & Chatbot</title>
+    <link rel="stylesheet" href="/static/css/chat.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>LIGO AI Assistant</h1>
+            <p>Gravity Spy</p>
+            <div class="status">
+                <span class="status-indicator" id="statusIndicator"></span>
+                <span id="statusText">Checking connection...</span>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div class="chat-messages" id="chatMessages">
+                <div class="message assistant">
+                    <div class="message-bubble">👋 Hello! I'm your LIGO assistant. Ask me anything!</div>
+                </div>
+            </div>
+            <div class="input-area">
+                <input type="text" id="chatInput" placeholder="Ask a question about LIGO...">
+                <button id="chatButton">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/chat.js"></script>
+</body>
+</html>

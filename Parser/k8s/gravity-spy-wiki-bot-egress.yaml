@@ -1,0 +1,84 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-gswiki-bot
+  namespace: gswiki-bot
+spec:
+  # Apply to all pods in this namespace
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to: # Allow Internal DNS
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53       
+  - to: # Allow syr.edu DNS
+    - ipBlock: 
+        cidr: '128.230.108.20/32'
+    - ipBlock: 
+        cidr: '128.230.108.21/32'
+    - ipBlock: 
+        cidr: '128.230.108.22/32'
+    - ipBlock: 
+        cidr: '128.230.108.23/32'
+    - ipBlock: 
+        cidr: '128.230.108.24/32'
+    - ipBlock: 
+        cidr: '128.230.108.25/32'
+    - ipBlock: 
+        cidr: '128.230.108.26/32'
+    - ipBlock: 
+        cidr: '128.230.108.27/32'
+    - ipBlock: 
+        cidr: '128.230.1.49/32'
+    - ipBlock: 
+        cidr: '128.230.12.5/32'
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - to: # allow traffic to s3.gswiki
+      - ipBlock:
+          cidr: 128.230.190.206/32
+    ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+  - to: # allow SMTP to smtp-relay.syr.edu
+      - ipBlock:
+          cidr: 128.230.18.87/32
+      - ipBlock:
+          cidr: 128.230.18.88/32
+      - ipBlock:
+          cidr: 128.230.21.31/32
+      - ipBlock:
+          cidr: 128.230.21.32/32
+    ports:
+        - port: 25
+          protocol: TCP
+        - port: 465
+          protocol: TCP
+        - port: 587
+          protocol: TCP
+  - to: # allow all traffic, besides to SU internal network
+    - ipBlock:
+        cidr: '0.0.0.0/0'
+        except:
+          - '10.0.0.0/8'
+          - '128.230.0.0/16'
+  - to: # allow traffic within namespace
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: gswiki-bot
+      podSelector: {}

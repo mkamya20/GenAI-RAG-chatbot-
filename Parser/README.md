@@ -1,287 +1,235 @@
 # Gravity Spy - Document Search & Chatbot
 
+A RAG-based chatbot for the Gravity Spy citizen science project. The chatbot answers questions about LIGO and gravitational wave detection using scientific documents and Zooniverse Talk posts as its knowledge base.
 
+## Architecture
+
+The application has two modes of operation:
+
+**Runtime (bot):** A FastAPI server that queries a pre-built ChromaDB index and generates answers via Azure OpenAI. PDF source links redirect to S3. The index is downloaded from S3 at startup if not already present.
+
+**Offline (loader):** A CLI pipeline that ingests PDFs and CSV talk posts, builds the ChromaDB index, and uploads everything to S3.
+
+```
+S3 Bucket
+├── gravity-spy-wiki-bot/
+│   ├── pdfs/                 # PDFs served via redirect
+│   └── chroma_db.tar.gz      # Pre-built index archive
+
+Bot (runtime)                  Loader (offline)
+├── data/                      ├── data/
+│   ├── chroma_db/ (from S3)   │   ├── pdfs/
+│   └── init.log               │   ├── csvs/
+├── app.py                     │   └── chroma_db/ (built locally)
+├── routers/                   ├── cli.py
+├── templates/                 └── upload_to_s3.py
+└── static/
+```
 
 ## Project Structure
 
 ```
-Parser/
-├── data/
-│   └── pdfs/              # Place your PDF files here
-├── outputs/
-│   └── chunks.jsonl      # Processed chunks (backup)
-├── chroma_db/            # ChromaDB vector database
-├── frontend.html         # Web interface
-├── fastapi_example.py    # FastAPI backend server
-├── ingest_pdfs.py        # PDF processing script
-├── retrieve_example.py   # Example retrieval script
-├── requirements.txt      # Python dependencies
-└── README.md            # This file
+├── routers/
+│   ├── __init__.py
+│   ├── utils.py              # Shared router utilities
+│   ├── health.py             # Health and info endpoints
+│   ├── chat.py               # Chat and search endpoints
+│   └── pdfs.py               # PDF endpoints (redirects to S3)
+├── static/
+│   ├── css/
+│   │   ├── chat.css          # Full page chat styles
+│   │   └── embed.css         # Embeddable widget styles
+│   └── js/
+│       ├── chat.js           # Full page chat logic
+│       └── embed.js          # Embeddable widget logic
+├── templates/
+│   ├── chat.html             # Full chat interface
+│   ├── embed.html            # Embeddable chat widget
+│   └── demo.html             # Embed demo page
+├── tests/
+│   └── ...
+├── app.py                    # FastAPI application setup
+├── config.py                 # Application configuration
+├── logging_config.py         # Logging setup
+├── azure_client.py           # Azure OpenAI client wrapper
+├── vector_store.py           # ChromaDB operations
+├── processor.py              # Shared chunking and embedding utilities
+├── pdf_processor.py          # PDF processing library
+├── talk_post_processor.py    # Talk post processing library
+├── models.py                 # Pydantic request/response models
+├── cli.py                    # CLI for index building and management
+├── upload_to_s3.py           # Upload PDFs and index to S3
+├── docker-entrypoint.sh      # Container entrypoint
+├── Dockerfile
+├── docker-compose.yml
+└── requirements.txt
 ```
 
 ## Prerequisites
 
-- Python 3.8 or higher
-- pip (Python package manager)
-- PDF files to process (optional, for initial setup)
+- Python 3.10+
+- Azure OpenAI credentials (for embeddings and chat)
+- S3-compatible storage with a public endpoint (for PDFs and index)
 
 ## Installation
 
-### 1. Clone or Navigate to the Project Directory
-
-```bash
-cd "C:...\Parser"
-```
-
-### 2. Install Python Dependencies
+### 1. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-**Note**: The `requirements.txt` file includes basic dependencies. You may also need to install:
+### 2. Configure Environment
 
-```bash
-pip install fastapi uvicorn openai chromadb python-dotenv
-```
-
-### 3. Set Up Environment Variables (Optional - for Azure OpenAI)
-
-If you want to use the AI chatbot feature, create a `.env` file in the project root:
+Create a `.env` file:
 
 ```env
-AZURE_OPENAI_API_KEY=your_api_key_here
+# Azure OpenAI
+AZURE_OPENAI_API_KEY=your_api_key
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
-AZURE_OPENAI_API_VERSION=2024-02-15-preview
-AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4
+AZURE_OPENAI_API_VERSION=2025-01-01-preview
+AZURE_OPENAI_DEPLOYMENT=GravitySpy-gpt-4o-mini
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=GravitySpy-text-embedding-3-small
+
+# S3 (for upload_to_s3.py)
+AWS_ACCESS_KEY_ID=your_key
+AWS_SECRET_ACCESS_KEY=your_secret
+AWS_ENDPOINT_URL=https://s3.gswiki.ischool.syr.edu
+AWS_BUCKET_NAME=images
 ```
 
-**Note**: The chatbot will work without Azure OpenAI, but will only return raw document chunks instead of generated answers.
+## Building the Index (Offline)
 
-## Usage
-
-### Step 1: Process PDF Documents
-
-Before you can search or chat, you need to process your PDF files:
-
-1. **Place PDF files** in the `data/pdfs/` directory
-
-2. **Run the ingestion script**:
+Place source data in `data/pdfs/` and `data/csvs/`, then build and upload:
 
 ```bash
-python ingest_pdfs.py ingest --input_dir data/pdfs --output_path outputs/chunks.jsonl
+# Build the ChromaDB index
+python cli.py pdfs --input-dir data/pdfs
+python cli.py csv --csv-path data/csvs/talk_posts.csv
+
+# Check the index
+python cli.py status --verbose
+
+# Upload PDFs and index archive to S3
+python upload_to_s3.py
+python upload_to_s3.py --dry-run    # Preview without uploading
 ```
 
-Or use default settings:
+## Running the Bot
+
+### Local Development
 
 ```bash
-python ingest_pdfs.py ingest
+python app.py
 ```
 
-This will:
-- Extract text from all PDFs in `data/pdfs/`
-- Split text into chunks (default: 1000 characters with 200 character overlap)
-- Generate embeddings using sentence-transformers
-- Store chunks in ChromaDB vector database
-- Save a backup JSONL file in `outputs/chunks.jsonl`
+The bot checks for `data/chroma_db/`. If present, it starts immediately. If not, the entrypoint downloads and extracts the index from S3.
 
-**Customization options**:
-```bash
-python ingest_pdfs.py ingest \
-    --input_dir data/pdfs \
-    --output_path outputs/chunks.jsonl \
-    --chunk_size 1000 \
-    --chunk_overlap 200 \
-    --embedding_model all-MiniLM-L6-v2
-```
+Access the application:
+- Demo page: `http://localhost:8000`
+- Embeddable widget: `http://localhost:8000/embed`
+- Full chat interface: `http://localhost:8000/chat`
+- API docs: `http://localhost:8000/docs`
 
-### Step 2: Start the Backend Server
-
-Start the FastAPI backend server:
+### Docker
 
 ```bash
-python fastapi_example.py
+docker compose up --build -d
 ```
 
-Or using uvicorn directly:
+On first startup, the entrypoint downloads `chroma_db.tar.gz` from S3 and extracts it. Subsequent startups use the persisted index.
 
 ```bash
-uvicorn fastapi_example:app --host 127.0.0.1 --port 8000 --reload
+# View logs
+docker compose logs
+
+# Check initialization
+cat ./data/init.log
+
+# Stop
+docker compose down
 ```
 
-The server will start on `http://127.0.0.1:8000`
+## Embedding the Chatbot
 
-**API Documentation**: Once the server is running, visit:
-- Swagger UI: `http://127.0.0.1:8000/docs`
-- ReDoc: `http://127.0.0.1:8000/redoc`
+The `/embed` endpoint serves a zero-chrome chat widget suitable for iframing:
 
-### Step 3: Open the Frontend
+```html
+<iframe
+  src="https://your-domain/embed"
+  width="400"
+  height="600"
+  style="border: none; border-radius: 12px;"
+  title="LIGO AI Assistant"
+></iframe>
+```
 
-1. **Open `frontend.html`** in your web browser:
-   - Double-click the file, or
-   - Right-click → Open with → Your preferred browser
+The demo page at `/` shows this in action.
 
-2. **Verify Connection**: The frontend will automatically check if the backend is running. You should see a green status indicator showing "Connected" with the number of chunks available.
+## Example Queries
 
-## Using the Application
+The chatbot answers questions about LIGO detector technology, gravitational wave science, and the Gravity Spy citizen science project. Try these in the chat interface or via CLI:
 
-### Chat Interface
-
-1. Click on the **💬 Chat** tab
-2. Type your question in the input field
-3. Press Enter or click "Send"
-4. The system will:
-   - Search for relevant document chunks
-   - Generate an answer using Azure OpenAI (if configured)
-   - Display the answer with source citations
-
-**Example queries**:
 - "What is the purpose of the LIGO detector?"
-- "Explain the calibration methods used"
-- "What are the key findings in the white paper?"
+- "How does power recycling work?"
+- "What are the main sources of noise in Advanced LIGO?"
+- "Explain the Q-transform and how it's used for glitch classification"
+- "What types of glitches does Gravity Spy classify?"
+- "How are seismic disturbances mitigated in the detector?"
+- "What upgrades are planned for future observing runs?"
 
-### Search Interface
+Via CLI:
 
-1. Click on the **🔍 Search** tab
-2. Enter your search query
-3. Press Enter or click "Search"
-4. View relevant document chunks with:
-   - Source filename
-   - Page numbers
-   - Matching text excerpts
+```bash
+python cli.py search --query "thermal noise and quantum noise limits" --top-k 5
+```
 
-**Example searches**:
-- "laser interferometer design"
-- "detector sensitivity"
-- "gravitational wave detection"
+For better results, be specific ("laser interferometer calibration methods" rather than just "calibration") and try different phrasings if the first attempt doesn't surface what you need.
 
 ## API Endpoints
 
-The FastAPI backend provides the following endpoints:
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/health` | Health check |
+| `GET` | `/api/init-log` | Container initialization log |
+| `POST` | `/api/chat` | RAG-based Q&A |
+| `POST` | `/api/search` | Direct semantic search |
+| `GET` | `/api/pdfs` | List indexed PDFs |
+| `GET` | `/api/pdfs/{filename}` | PDF metadata |
+| `GET` | `/api/pdfs/{filename}/download` | Redirect to PDF on S3 |
 
-### Health Check
-```
-GET /api/health
-```
-Returns server status and database information.
+## CLI Reference
 
-### Chat (RAG-based Q&A)
-```
-POST /api/chat
-Body: {
-    "query": "Your question here",
-    "top_k": 5,
-    "use_rag": true
-}
-```
+| Command | Description |
+|---------|-------------|
+| `pdfs --input-dir <dir>` | Ingest all PDFs from a directory |
+| `pdf --file <path>` | Ingest a single PDF |
+| `csv --csv-path <path>` | Ingest talk posts from CSV |
+| `add-post` | Add a single talk post |
+| `search --query <text>` | Search the index |
+| `status` | Show index status |
+| `delete --filename <name>` | Delete a document |
+| `clear --source-type <type>` | Clear all chunks of a type |
 
-### Semantic Search
-```
-POST /api/search
-Body: {
-    "query": "Search query",
-    "top_k": 5,
-    "filter_filename": "optional_filename.pdf"
-}
-```
+Common flags: `--dry-run`, `--replace`, `--force`, `--batch-size`, `--delay`
 
-### Document Management
-```
-GET /api/documents              # List all documents
-GET /api/documents/{filename}   # Get document details
-POST /api/upload                # Upload and process a PDF
-DELETE /api/documents/{filename} # Delete a document
-```
+## Configuration
 
-## Command-Line Usage
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CHROMA_DB_PATH` | `data/chroma_db` | Vector database path |
+| `PDF_DIR` | `data/pdfs` | PDF source directory |
+| `CSV_DIR` | `data/csvs` | CSV source directory |
+| `S3_SEED_DATA_BASE` | `https://s3.gswiki.ischool.syr.edu/images` | S3 public base URL |
+| `S3_SEED_DATA_PREFIX` | `gravity-spy-wiki-bot` | S3 key prefix |
 
-### Search Documents (CLI)
-
-You can also search from the command line:
+## Testing
 
 ```bash
-python ingest_pdfs.py search --query "your search query" --top_k 5
+pytest
+pytest -v                              # Verbose
+pytest tests/test_vector_store.py      # Specific file
+pytest --cov=. --cov-report=term-missing  # With coverage
 ```
 
-### Example Queries
-
-See `EXAMPLE_QUERIES.md` for a comprehensive list of example queries organized by document type.
-
-## Troubleshooting
-
-### Backend Not Starting
-
-- **Check Python version**: Ensure you have Python 3.8+
-- **Install dependencies**: Run `pip install -r requirements.txt` again
-- **Check port**: Ensure port 8000 is not in use by another application
-
-### Frontend Can't Connect
-
-- **Verify backend is running**: Check `http://127.0.0.1:8000/api/health` in your browser
-- **Check CORS settings**: The backend allows all origins by default
-- **Check browser console**: Open Developer Tools (F12) to see error messages
-
-### No Search Results
-
-- **Process documents first**: Run `python ingest_pdfs.py ingest`
-- **Check ChromaDB**: Ensure `chroma_db/` directory exists and contains data
-- **Verify PDFs**: Make sure PDFs in `data/pdfs/` contain extractable text
-
-### Azure OpenAI Errors
-
-- **Check .env file**: Ensure all required environment variables are set
-- **Verify API key**: Test your Azure OpenAI credentials
-- **Check deployment name**: Ensure the deployment name matches your Azure resource
-- **Note**: The system works without Azure OpenAI, but only returns raw chunks
-
-## Advanced Configuration
-
-### Changing Embedding Model
-
-Edit the `embedding_model` parameter in `ingest_pdfs.py` or pass it as an argument:
-
-```bash
-python ingest_pdfs.py ingest --embedding_model all-mpnet-base-v2
-```
-
-Popular models:
-- `all-MiniLM-L6-v2` (default, fast, 384 dimensions)
-- `all-mpnet-base-v2` (slower, more accurate, 768 dimensions)
-- `all-MiniLM-L12-v2` (balanced)
-
-### Adjusting Chunk Size
-
-Smaller chunks = more precise but may miss context
-Larger chunks = more context but less precise
-
-```bash
-python ingest_pdfs.py ingest --chunk_size 500 --chunk_overlap 100
-```
-
-### Custom API Port
-
-Edit `fastapi_example.py` or use uvicorn:
-
-```bash
-uvicorn fastapi_example:app --host 127.0.0.1 --port 8080
-```
-
-Then update `API_BASE_URL` in `frontend.html` (line 299) to match.
-
-## Dependencies
-
-### Core Dependencies
-- `pypdf` - PDF text extraction
-- `langchain-text-splitters` - Text chunking
-- `sentence-transformers` - Embedding generation
-- `numpy` - Numerical operations
-- `chromadb` - Vector database
-- `fastapi` - Web framework
-- `uvicorn` - ASGI server
-- `openai` - Azure OpenAI integration
-- `python-dotenv` - Environment variable management
-
-
-
-**Happy Searching! 🔭**
-
+Tests use mocked embeddings and an isolated collection. Integration tests in `test_azure_integration.py` hit the real API and auto-skip when credentials are absent.

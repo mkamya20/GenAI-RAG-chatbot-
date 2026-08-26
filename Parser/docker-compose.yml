@@ -1,30 +1,31 @@
-version: '3.8'
-
 services:
   gravity-spy-app:
     build: .
     container_name: gravity-spy-chatbot
+
     ports:
       - "8000:8000"
+
     volumes:
-      # Persist ChromaDB data
-      - ./chroma_db:/app/chroma_db
-      # Mount PDF files
-      - ./data/pdfs:/app/data/pdfs
-      # Mount outputs directory (optional, for backups)
-      - ./outputs:/app/outputs
-      # Mount temp directory for uploads
-      - ./data/temp:/app/data/temp
+      # Persist only the ChromaDB index (seed data fetched from S3 at runtime)
+      - ./data/chroma_db:/app/data/chroma_db
+
     environment:
-      # Load from .env file if it exists
+      # S3 seed data configuration
+      - S3_SEED_DATA_URL=${S3_SEED_DATA_URL:-https://s3.gswiki.ischool.syr.edu/images/gravity-spy-wiki-bot}
+      - S3_SEED_DATA_BASE=${S3_SEED_DATA_BASE:-https://s3.gswiki.ischool.syr.edu/images}
+      # Azure OpenAI
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
-      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-02-15-preview}
-      - AZURE_OPENAI_DEPLOYMENT_NAME=${AZURE_OPENAI_DEPLOYMENT_NAME:-gpt-4}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2025-01-01-preview}
+      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT:-GravitySpy-gpt-4o-mini}
+      - AZURE_OPENAI_EMBEDDING_DEPLOYMENT=${AZURE_OPENAI_EMBEDDING_DEPLOYMENT:-GravitySpy-text-embedding-3-small}
+      - CHROMA_DB_PATH=${CHROMA_DB_PATH:-data/chroma_db}
+      - PDF_DIR=${PDF_DIR:-data/pdfs}
+      - CSV_DIR=${CSV_DIR:-data/csvs}
+      - TEMP_DIR=${TEMP_DIR:-data/temp}
+
     restart: unless-stopped
+
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]

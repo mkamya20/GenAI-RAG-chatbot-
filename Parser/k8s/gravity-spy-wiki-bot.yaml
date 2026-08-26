@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: gswiki-bot
+  name: gswiki-bot
+  namespace: gswiki-bot
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gswiki-bot
+  template:
+    metadata:
+      labels:
+        app: gswiki-bot
+    spec:
+      imagePullSecrets:
+      - name: regcred
+      containers:
+        - name: gswiki-bot
+          imagePullPolicy: Always
+          image: harbor.ischool.syr.edu/gravity-spy/gravity-spy-wiki-bot:v1.0
+          #command: ["/app/entrypoint.sh"]
+          ports:
+          - containerPort: 8000
+            protocol: TCP
+          env:
+          - name: AZURE_OPENAI_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: gswiki-bot-secret
+                key: azure-openai-api-key
+          - name: AZURE_OPENAI_ENDPOINT
+            value: "https://gravityspy.cognitiveservices.azure.com"
+          - name: AZURE_OPENAI_DEPLOYMENT
+            value: "GravitySpy-gpt-4o-mini"
+          - name: AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+            value: "GravitySpy-text-embedding-3-small"
+          - name: AZURE_OPENAI_API_VERSION
+            value: "2024-12-01-preview"
+          - name: CHROMA_DB_PATH
+            value: "data/chroma_db"
+          - name: PDF_DIR
+            value: "data/pdfs"
+          - name: CSV_DIR
+            value: "data/csvs"
+          - name: TEMP_DIR
+            value: "data/temp"
+          - name: DEFAULT_BATCH_SIZE
+            value: "32"
+          - name: DEFAULT_BATCH_DELAY
+            value: "2.0"
+          # S3 seed data
+          - name: AWS_SERVICE
+            value: "s3"
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: gswiki-bot-secret
+                key: aws-access-key-id
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: gswiki-bot-secret
+                key: aws-secret-access-key
+          - name: AWS_ENDPOINT_URL
+            value: "https://s3.gswiki.ischool.syr.edu"
+          - name: AWS_BUCKET_NAME
+            value: "images"
+          - name: S3_SEED_DATA_URL
+            value: "https://s3.gswiki.ischool.syr.edu/images/gravity-spy-wiki-bot"
+          - name: S3_SEED_DATA_BASE
+            value: "https://s3.gswiki.ischool.syr.edu/images"
+          # Email notifications
+          - name: NOTIFY_ENABLED
+            value: "true"
+          - name: NOTIFY_MODE
+            value: "round"
+          - name: NOTIFY_DIGEST_INTERVAL
+            value: "60"
+          - name: SMTP_HOST
+            value: "smtp-relay.syr.edu"
+          - name: SMTP_PORT
+            value: "587"
+          - name: SMTP_USERNAME
+            value: "s-ist-ccdsmail"
+          - name: SMTP_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: gswiki-bot-secret
+                key: smtp-password
+          - name: SMTP_USE_TLS
+            value: "true"
+          - name: NOTIFY_FROM
+            value: "gravityspy-wiki-bot@syr.edu"
+          - name: NOTIFY_TO
+            value: "jrstrome@syr.edu,aosmith@syr.edu"
+          - name: ZOT_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: gswiki-bot-secret
+                key: zot-api-key
+          - name: ZOT_GROUP_ID
+            value: "5126314"
+          - name: ZOT_COLLECTION_KEY
+            value: RMXHTMEV
+          - name: WIKI_PUBLIC_URL
+            value: https://gswiki.ischool.syr.edu
+        - name: tls-sidecar
+          image: nginxinc/nginx-unprivileged:latest
+          ports:
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+          volumeMounts:
+            - name: sidecar-config
+              mountPath: "/etc/nginx"
+              readOnly: true
+            - name: sidecar-certs
+              mountPath: "/certs"
+              readOnly: true
+      dnsPolicy: "ClusterFirst"
+      dnsConfig:
+        nameservers:
+          - 10.96.0.10
+          - 128.230.108.24
+          - 128.230.108.27
+      volumes:
+        - name: sidecar-config
+          configMap:
+            name: gswiki-bot-sidecar-configmap
+        - name: sidecar-certs
+          secret:
+            secretName: tls-certs

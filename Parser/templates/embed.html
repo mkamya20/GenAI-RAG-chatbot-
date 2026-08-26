@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Embed</title>
+    <link rel="stylesheet" href="/static/css/embed.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+</head>
+<body>
+    <div class="embed-container">
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                <div class="message-bubble">Hello! Ask me anything.</div>
+            </div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="chatInput" placeholder="Type your question...">
+            <button id="chatButton">Send</button>
+        </div>
+    </div>
+
+    <script src="/static/js/embed.js"></script>
+</body>
+</html>

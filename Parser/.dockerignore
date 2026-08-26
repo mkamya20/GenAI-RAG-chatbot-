@@ -9,12 +9,14 @@ venv/
 ENV/
 .venv
 
-# ChromaDB (will be mounted as volume)
-chroma_db/
+.pytest_cache/
+tests/
+.coverage
 
-# Data files (will be mounted as volume)
-data/pdfs/
-outputs/
+
+# Data files (only exclude generated data; seed data is baked into image)
+data/chroma_db/
+data/temp/
 
 # IDE
 .vscode/

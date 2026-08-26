@@ -1,7 +1,10 @@
+.devcontainer/
+
 # Environment variables
 .env
 
 # Python
+.pytest_cache/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -11,12 +14,12 @@ env/
 venv/
 ENV/
 
-# ChromaDB
+# Data directories (seed data downloaded from S3 at runtime)
 chroma_db/
+data/
 
-# Outputs
-outputs/
-*.jsonl
+outputs/*
+!outputs/.gitkeep
 
 # IDE
 .vscode/
@@ -27,6 +30,3 @@ outputs/
 # OS
 .DS_Store
 Thumbs.db
-
-
-
